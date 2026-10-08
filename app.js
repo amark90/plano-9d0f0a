@@ -107,10 +107,90 @@ const TIME_FIELDS = [
   ["pa", "Pequeno-almoço", "08:00"],
   ["mm", "Meio da manhã", "10:30"],
   ["al", "Almoço, começar a cozinhar", "12:30"],
-  ["la", "Lanche", "17:00"],
-  ["ja", "Jantar", "20:30"],
-  ["gym", "Ginásio ou caminhada", "18:30"],
   ["shop", "Compras, domingo", "10:00"],
+];
+
+const GYM_HOURS = ["18:30", "19:00", "20:30", "21:00"];
+
+const WEEK_PLANS = [
+  {
+    name: "Barra e máquinas",
+    days: {
+      0: [
+        "Supino reto, 3×6–8, descanso 2 min",
+        "Remada, 3×6–10, descanso 2 min",
+        "Supino inclinado com halteres, 2×8–10",
+        "Puxada pela frente, 2×8–10",
+        "Passadeira inclinada ou bicicleta, 15 min",
+      ],
+      2: [
+        "Leg press, hack ou agachamento, 3×6–8",
+        "Peso morto romeno, 3×6–8",
+        "Afundo, 2×8 por perna",
+        "Prancha, 2×40 s",
+        "Passadeira ou bicicleta, 15 min",
+      ],
+      4: [
+        "Desenvolvimento sentado, 3×6–8",
+        "Face pull, 2×12–15",
+        "Elevação lateral, 2×12–15",
+        "Dead bug, 2×8 por lado",
+        "Passadeira ou bicicleta, 20 min",
+      ],
+    },
+  },
+  {
+    name: "Halteres e cabo",
+    days: {
+      0: [
+        "Supino com halteres, 3×8–10, descanso 2 min",
+        "Remada sentada no cabo, 3×8–10, descanso 2 min",
+        "Flexão com as mãos num banco, 2×8–12",
+        "Puxada pela frente, 2×10–12",
+        "Passadeira inclinada ou bicicleta, 15 min",
+      ],
+      2: [
+        "Agachamento goblet, 3×8–10",
+        "Flexão femoral, 3×8–10",
+        "Afundo, 2×8 por perna",
+        "Dead bug, 2×8 por lado",
+        "Passadeira ou bicicleta, 15 min",
+      ],
+      4: [
+        "Desenvolvimento em pé com halteres, 3×8–10",
+        "Face pull, 2×12–15",
+        "Elevação lateral, 2×12–15",
+        "Prancha, 2×40 s",
+        "Passadeira ou bicicleta, 20 min",
+      ],
+    },
+  },
+  {
+    name: "Apoio e um braço",
+    days: {
+      0: [
+        "Supino reto, 3×8–10, descanso 2 min",
+        "Serrote, 3×8–10 por braço",
+        "Supino inclinado com halteres, 2×8–10",
+        "Puxada pela frente, 2×8–10",
+        "Passadeira inclinada ou bicicleta, 15 min",
+      ],
+      2: [
+        "Leg press, 3×10–12",
+        "Peso morto romeno, 3×8–10",
+        "Subida ao banco, 2×8 por perna",
+        "Prancha lateral, 2×20 s por lado",
+        "Passadeira ou bicicleta, 15 min",
+      ],
+      4: [
+        "Desenvolvimento sentado, 3×8–10",
+        "Face pull, 2×12–15",
+        "Elevação lateral no banco inclinado, 2×12–15",
+        "Dead bug, 2×8 por lado",
+        "Passadeira ou bicicleta, 20 min",
+      ],
+    },
+  },
 ];
 
 function meal(id, slot, title, meta, items, steps) {
@@ -138,6 +218,7 @@ function save(key, value) {
 let done = load("plano-done", {});
 let shop = load("plano-shop", {});
 let times = load("plano-times", Object.fromEntries(TIME_FIELDS.map(([id, , value]) => [id, value])));
+let gymHour = GYM_HOURS.includes(load("plano-gym-hour", "18:30")) ? load("plano-gym-hour", "18:30") : "18:30";
 let shopWeek = load("plano-shop-week", weekKey(new Date()));
 
 function weekKey(date) {
@@ -175,6 +256,51 @@ function keyMeal(index, id) {
 }
 function keyPart(index, id, kind, i) {
   return `${iso(dateFor(index))}|${id}|${kind}|${i}`;
+}
+
+function shiftClock(hhmm, delta) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const total = ((h * 60 + m + delta) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function dayClock(index) {
+  const lift = index === 0 || index === 2 || index === 4;
+  if (!lift) return { lift: false, gym: index === 6 ? "" : gymHour, snack: "17:00", dinner: "20:30" };
+  return { lift: true, gym: gymHour, snack: shiftClock(gymHour, -90), dinner: shiftClock(gymHour, 120) };
+}
+
+function trainingWeek(date) {
+  const start = new Date(2026, 9, 5, 12, 0, 0);
+  const d = new Date(date);
+  d.setHours(12, 0, 0, 0);
+  const n = Math.floor((d - start) / 604800000);
+  const index = ((n % 6) + 6) % 6;
+  const planIndex = [0, 1, 2, 0, 1, 0][index];
+  return { number: index + 1, plan: WEEK_PLANS[planIndex], light: index === 5 };
+}
+
+function lighten(text) {
+  return text.replace(/3×/g, "2×").replace(/15 min/g, "10 min").replace(/20 min/g, "12 min");
+}
+
+function exercisesFor(index) {
+  const week = trainingWeek(dateFor(index));
+  const planned = week.plan.days[index];
+  if (!planned) return DAYS[index].exercises;
+  return week.light ? planned.map(lighten) : planned;
+}
+
+function hourPicker() {
+  return `
+    <p class="note hour-label">Hora do ginásio</p>
+    <div class="days">${GYM_HOURS.map((hour) => `<button data-gym-hour="${hour}" class="${hour === gymHour ? "on" : ""}">${hour}</button>`).join("")}</div>`;
+}
+
+function clockNote(index) {
+  const clock = dayClock(index);
+  if (!clock.lift) return "Neste dia não há pesos. Lanche às 17:00 e jantar às 20:30.";
+  return `Lanche às ${clock.snack}, ginásio às ${clock.gym}, jantar às ${clock.dinner}. O jantar fica depois do treino.`;
 }
 
 function tick(on) {
@@ -223,6 +349,8 @@ function renderHoje() {
       <div class="meta">${day.gym}</div>
       <div class="bar"><span style="width:${pct}%"></span></div>
     </div>
+    ${hourPicker()}
+    <p class="note">${clockNote(selected)}</p>
     <div class="days">${DAYS.map((item, index) => `<button data-day="${index}" class="${index === selected ? "on" : ""}">${item.name.slice(0, 3)}</button>`).join("")}</div>
     ${day.meals.map((item) => mealCard(item)).join("")}
   `;
@@ -239,7 +367,7 @@ function mealCard(item) {
         ${tick(on).replace("<button", `<button data-toggle="${item.id}"`)}
         <button class="grow" data-open="${item.id}">
           <p class="title">${item.slot}</p>
-          <p class="meta">${item.title} · ${item.meta}</p>
+          <p class="meta">${esc(item.title)} · ${esc(item.meta)}${item.id === "la" || item.id === "ja" ? ` · ${item.id === "la" ? dayClock(selected).snack : dayClock(selected).dinner}` : ""}</p>
         </button>
       </div>
       ${open ? `<div class="detail"><h3>Ingredientes</h3>${ingredients}<h3>Como fazer</h3>${steps}</div>` : ""}
@@ -292,15 +420,20 @@ function renderCompras(freshWeek) {
 
 function renderTreino() {
   const day = DAYS[selected];
-  const doneCount = day.exercises.filter((_, i) => done[keyPart(selected, "gym", "ex", i)]).length;
+  const week = trainingWeek(dateFor(selected));
+  const exercises = exercisesFor(selected);
+  const doneCount = exercises.filter((_, i) => done[keyPart(selected, "gym", "ex", i)]).length;
   app.innerHTML = `
     <h1>Treino</h1>
     <p class="sub">${day.name} · ${day.gym}</p>
+    <p class="note">Semana ${week.number} de 6 · ${esc(week.plan.name)}${week.light ? " · semana leve, 2 séries e longe da falha" : ""}. Na semana seguinte os exercícios mudam.</p>
+    ${hourPicker()}
+    <p class="note">${clockNote(selected)}</p>
     <div class="days">${DAYS.map((item, index) => `<button data-day="${index}" class="${index === selected ? "on" : ""}">${item.name.slice(0, 3)}</button>`).join("")}</div>
-    <p class="note">Vídeo curto de cada exercício, para reconheceres o movimento no ginásio.</p>
+    <p class="note">Vídeo curto de cada exercício, para reconheceres o movimento no ginásio. Onde não há vídeo, fica a descrição.</p>
     <section class="group">
-      <h2>${doneCount} de ${day.exercises.length}</h2>
-      ${day.exercises.map((text, i) => exerciseCard(text, i)).join("")}
+      <h2>${doneCount} de ${exercises.length}</h2>
+      ${exercises.map((text, i) => exerciseCard(text, i)).join("")}
     </section>
     <p class="note">Deixas duas repetições por fazer. A cada 50 minutos sentado, 5 minutos de pé.</p>
   `;
@@ -320,7 +453,8 @@ function exerciseCard(text, i) {
 function renderAlertas() {
   app.innerHTML = `
     <h1>Alertas</h1>
-    <p class="note">No iPhone, o alarme que toca com o ecrã bloqueado fica no Calendário. Este botão cria a semana: o que comer, quando começar a cozinhar, o ginásio e as compras de domingo no Continente Modelo.</p>
+    <p class="note">No iPhone, o alarme que toca com o ecrã bloqueado fica no Calendário. Segunda, quarta e sexta o lanche é 90 minutos antes do ginásio e o jantar é duas horas depois de começares.</p>
+    ${hourPicker()}
     <div class="panel" style="padding:14px">
       ${TIME_FIELDS.map(([id, label]) => `<label class="field">${label}<input type="time" data-time="${id}" value="${times[id] || "08:00"}"></label>`).join("")}
       <div class="actions"><button class="primary" data-ics>Adicionar alertas ao Calendário</button></div>
@@ -354,6 +488,12 @@ document.body.addEventListener("click", (event) => {
   if (!target) return;
   if (target.dataset.tab) {
     tab = target.dataset.tab;
+    render();
+    return;
+  }
+  if (target.dataset.gymHour) {
+    gymHour = target.dataset.gymHour;
+    save("plano-gym-hour", gymHour);
     render();
     return;
   }
@@ -403,8 +543,9 @@ function downloadIcs() {
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Plano Lamego//PT", "CALSCALE:GREGORIAN"];
   const byday = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
   DAYS.forEach((day, index) => {
+    const clock = dayClock(index);
     day.meals.forEach((item) => {
-      const when = times[item.id] || "08:00";
+      const when = item.id === "la" ? clock.snack : item.id === "ja" ? clock.dinner : (times[item.id] || "08:00");
       lines.push(...eventLines({
         uid: `meal-${index}-${item.id}@plano-lamego`,
         start: nextStamp(index, when),
@@ -414,14 +555,16 @@ function downloadIcs() {
         description: `${item.items.join("; ")}. ${item.steps.join(" ")}`,
       }));
     });
-    lines.push(...eventLines({
-      uid: `gym-${index}@plano-lamego`,
-      start: nextStamp(index, times.gym || "18:30"),
-      minutes: 70,
-      byday: byday[index],
-      title: day.gym,
-      description: day.exercises.join("; "),
-    }));
+    if (clock.gym) {
+      lines.push(...eventLines({
+        uid: `gym-${index}@plano-lamego`,
+        start: nextStamp(index, clock.gym),
+        minutes: 70,
+        byday: byday[index],
+        title: day.gym,
+        description: exercisesFor(index).join("; "),
+      }));
+    }
   });
   lines.push(...eventLines({
     uid: "compras@plano-lamego",
