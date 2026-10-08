@@ -315,7 +315,7 @@ function installCard() {
   return `
     <section class="install">
       <strong>Pôr no iPhone</strong>
-      <p>No Safari, toca em Partilhar (o quadrado com a seta para cima) e depois em Adicionar ao Ecrã Principal. Abre pelo ícone Plano. Depois disso funciona sem Wi‑Fi e sem o computador.</p>
+      <p>No Firefox, toca no ícone de partilhar e em Adicionar ao Ecrã Principal. Se essa opção não aparecer, copia o endereço, abre-o no Safari e faz o mesmo passo. O ícone Plano abre depois sem Wi‑Fi.</p>
     </section>`;
 }
 
@@ -459,7 +459,7 @@ function renderAlertas() {
       ${TIME_FIELDS.map(([id, label]) => `<label class="field">${label}<input type="time" data-time="${id}" value="${times[id] || "08:00"}"></label>`).join("")}
       <div class="actions"><button class="primary" data-ics>Adicionar alertas ao Calendário</button></div>
     </div>
-    <p class="note">No Safari do iPhone: descarrega o ficheiro, abre-o, e escolhe Calendário. Confirma os avisos na hora do evento. Para teres a checklist no ecrã principal, Partilhar e depois Adicionar ao ecrã principal.</p>
+    <p class="note">No Firefox: descarrega o ficheiro, abre-o e escolhe Calendário. Confirma os avisos na hora do evento.</p>
   `;
 }
 
